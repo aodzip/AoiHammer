@@ -30,12 +30,23 @@ typedef struct IndexInfo
     ChainNode **parallelSearchIndex;
 } IndexInfo;
 
-static IndexInfo indexA[0xFFFF];
-static IndexInfo indexB[0xFFFF];
-static IndexInfo indexC[0xFFFF];
-static IndexInfo indexD[0xFFFF];
+typedef struct ThreadArgv
+{
+    IndexInfo *index;
+    uint8_t workerId;
+    uint64_t hash;
+} ThreadArgv;
 
-ImageInfo *createImageInfo(uint64_t id, uint64_t phash);
+typedef struct SearchResult
+{
+    uint64_t id;
+    uint8_t distance;
+} SearchResult;
+
+void insertData(uint64_t id, uint64_t phash);
 uint8_t initIndex(IndexInfo *index);
 uint8_t insertIndex(IndexInfo *index, ImageInfo *image);
 uint64_t searchNode(ChainNode *start, ChainNode *end, uint64_t hash, uint8_t *distance);
+uint64_t startSearch(pHashStore hash);
+void launchWorker(IndexInfo *index, uint64_t hash);
+void *searchThread(void *argv);

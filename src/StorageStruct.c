@@ -1,12 +1,28 @@
 #include "StorageStruct.h"
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
+
+static IndexInfo indexStorage[4][0xFFFF];
+static SearchResult *parallelSearchResult;
+
+void insertData(uint64_t id, uint64_t phash)
+{
+    ImageInfo *im = calloc(1, sizeof(ImageInfo));
+    im->id = id;
+    im->phash.hash = phash;
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        IndexInfo *index = &indexStorage[i][im->phash.section[i]];
+        insertIndex(index, im);
+    }
+}
 
 uint8_t initIndex(IndexInfo *index)
 {
     uint8_t cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
     index->parralSearchWorker = cpuCount;
-    ChainNode **parallelSearchIndex = calloc(cpuCount, sizeof(ChainNode *));
+    ChainNode **parallelSearchIndex = calloc(cpuCount + 1, sizeof(ChainNode *));
     if (parallelSearchIndex == NULL)
     {
         return 0;
@@ -80,6 +96,63 @@ uint64_t searchNode(ChainNode *start, ChainNode *end, uint64_t hash, uint8_t *di
         }
         current = current->next;
     } while (current != end);
-    distance = currentDistance;
+    *distance = currentDistance;
     return result;
+}
+
+uint64_t startSearch(pHashStore hash)
+{
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        IndexInfo *index = indexStorage[i];
+        if (index[hash.section[i]].count > 0)
+        {
+            launchWorker(index, hash.hash);
+            uint64_t result;
+            uint8_t currentDistance = 64;
+            for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+            {
+                SearchResult rs = parallelSearchResult[i];
+                if (rs.distance < currentDistance)
+                {
+                    result = rs.id;
+                }
+            }
+            free(parallelSearchResult);
+            return result;
+        }
+    }
+    return 0;
+}
+
+void launchWorker(IndexInfo *index, uint64_t hash)
+{
+    parallelSearchResult = calloc(index->parralSearchWorker, sizeof(uint64_t));
+    pthread_t threadId[index->parralSearchWorker];
+    for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+    {
+        ThreadArgv *argv = calloc(1, sizeof(ThreadArgv));
+        argv->index = index;
+        argv->workerId = i;
+        argv->hash = hash;
+        pthread_create(&threadId[i], NULL, searchThread, argv);
+    }
+    for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+    {
+        pthread_join(threadId[i], NULL);
+    }
+}
+
+void *searchThread(void *argv)
+{
+    ThreadArgv *arg = argv;
+    IndexInfo *index = arg->index;
+    uint8_t workerId = arg->workerId;
+    uint64_t hash = arg->hash;
+    uint8_t distance;
+    uint64_t result = searchNode(index->parallelSearchIndex[workerId], index->parallelSearchIndex[workerId + 1], hash, &distance);
+    parallelSearchResult[workerId].id = result;
+    parallelSearchResult[workerId].distance = distance;
+    free(argv);
+    return ((void *)NULL);
 }

@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "aoihammer.h": "c",
+        "searchworker.h": "c",
+        "storagestruct.h": "c"
+    }
+}
