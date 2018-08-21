@@ -11,17 +11,34 @@
 #include <sys/select.h>
 #include <string.h>
 #include "StorageStruct.h"
+#include <time.h>
 
 int main(int argc, char **argv)
 {
-    // srand(500);
-    // for (uint8_t i = 0; i < 128; i++)
-    // {
-    //     ImageInfo *im = calloc(1, sizeof(ImageInfo));
-    //     im->id = i;
-    //     im->phash.hash = rand();
-    //     insertIndex(&indexStorage[0][0], im);
-    // }
+    srand(500);
+    for (uint64_t i = 0; i < 50000000; i++)
+    {
+        if (i % 1000000 == 0)
+        {
+            printf("Current: %ld\n", i);
+        }
+        uint64_t data = rand();
+        insertData(i, data);
+    }
+    printf("Generate Done!\n");
+    while (1)
+    {
+        int64_t input;
+        printf("Input int64_t pHash: ");
+        scanf("%ld", &input);
+        pHashStore phash;
+        phash.hash = input;
+        clock_t cBegin = clock();
+        uint64_t rs = startSearch(phash);
+        clock_t cEnd = clock();
+        printf("Result: %lu\n", rs);
+        printf("Execution time: %fs\n", ((double)cEnd - cBegin) / CLOCKS_PER_SEC);
+    }
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;

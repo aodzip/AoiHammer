@@ -104,9 +104,10 @@ uint64_t startSearch(pHashStore hash)
 {
     for (uint8_t i = 0; i < 4; i++)
     {
-        IndexInfo *index = indexStorage[i];
-        if (index[hash.section[i]].count > 0)
+        IndexInfo *indexList = indexStorage[i];
+        if (indexList[hash.section[i]].count > 0)
         {
+            IndexInfo *index = &indexList[hash.section[i]];
             launchWorker(index, hash.hash);
             uint64_t result;
             uint8_t currentDistance = 64;
@@ -127,7 +128,7 @@ uint64_t startSearch(pHashStore hash)
 
 void launchWorker(IndexInfo *index, uint64_t hash)
 {
-    parallelSearchResult = calloc(index->parralSearchWorker, sizeof(uint64_t));
+    parallelSearchResult = calloc(index->parralSearchWorker, sizeof(SearchResult));
     pthread_t threadId[index->parralSearchWorker];
     for (uint8_t i = 0; i < index->parralSearchWorker; i++)
     {
@@ -150,9 +151,19 @@ void *searchThread(void *argv)
     uint8_t workerId = arg->workerId;
     uint64_t hash = arg->hash;
     uint8_t distance;
-    uint64_t result = searchNode(index->parallelSearchIndex[workerId], index->parallelSearchIndex[workerId + 1], hash, &distance);
-    parallelSearchResult[workerId].id = result;
-    parallelSearchResult[workerId].distance = distance;
+    ChainNode *start = index->parallelSearchIndex[workerId];
+    ChainNode *end = index->parallelSearchIndex[workerId + 1];
+    if (start == NULL)
+    {
+        parallelSearchResult[workerId].id = 0;
+        parallelSearchResult[workerId].distance = 64;
+    }
+    else
+    {
+        uint64_t result = searchNode(start, end, hash, &distance);
+        parallelSearchResult[workerId].id = result;
+        parallelSearchResult[workerId].distance = distance;
+    }
     free(argv);
     return ((void *)NULL);
 }
