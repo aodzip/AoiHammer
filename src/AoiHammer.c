@@ -10,12 +10,12 @@
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <string.h>
-#include "StorageStruct.h"
 #include <time.h>
+#include "StorageStruct.h"
 
 int main(int argc, char **argv)
 {
-    srand(500);
+    srand(time(NULL));
     for (uint64_t i = 0; i < 50000000; i++)
     {
         if (i % 1000000 == 0)
@@ -26,19 +26,6 @@ int main(int argc, char **argv)
         insertData(i, data);
     }
     printf("Generate Done!\n");
-    while (1)
-    {
-        int64_t input;
-        printf("Input int64_t pHash: ");
-        scanf("%ld", &input);
-        pHashStore phash;
-        phash.hash = input;
-        clock_t cBegin = clock();
-        uint64_t rs = startSearch(phash);
-        clock_t cEnd = clock();
-        printf("Result: %lu\n", rs);
-        printf("Execution time: %fs\n", ((double)cEnd - cBegin) / CLOCKS_PER_SEC);
-    }
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;
@@ -58,7 +45,6 @@ int main(int argc, char **argv)
     fd_set socketDescriptorSet;
     FD_ZERO(&socketDescriptorSet);
     FD_SET(serverSocket, &socketDescriptorSet);
-    struct sockaddr_in clientAddress;
     do
     {
         fd_set socketDescriptorSetCopy = socketDescriptorSet;
@@ -74,6 +60,7 @@ int main(int argc, char **argv)
             {
                 if (descriptor == serverSocket)
                 {
+                    struct sockaddr_in clientAddress;
                     socklen_t sizeofClientSocketAddr = sizeof(clientAddress);
                     int clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddress, &sizeofClientSocketAddr);
                     FD_SET(clientSocket, &socketDescriptorSet);
@@ -91,13 +78,20 @@ int main(int argc, char **argv)
                     {
                         char buffer[64];
                         memset(buffer, 0, sizeof(buffer));
-                        int recvLength = read(descriptor, buffer, sizeof(buffer));
-                        // TODO
+                        read(descriptor, buffer, sizeof(buffer) - 1);
+                        int64_t queryHash;
+                        sscanf(buffer, "%ld", &queryHash);
+                        pHashStore phash;
+                        phash.hash = queryHash;
+                        uint64_t resultId = startSearch(phash);
+                        memset(buffer, 0, sizeof(buffer));
+                        sprintf(buffer, "%lu\n", resultId);
                         write(descriptor, buffer, sizeof(buffer));
+                        close(descriptor);
+                        FD_CLR(descriptor, &socketDescriptorSet);
                     }
                 }
             }
         }
-
     } while (1);
 }

@@ -11,9 +11,9 @@ void insertData(uint64_t id, uint64_t phash)
     ImageInfo *im = calloc(1, sizeof(ImageInfo));
     im->id = id;
     im->phash.hash = phash;
-    for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t hashSection = 0; hashSection < 4; hashSection++)
     {
-        IndexInfo *index = &indexStorage[i][im->phash.section[i]];
+        IndexInfo *index = &indexStorage[hashSection][im->phash.section[hashSection]];
         insertIndex(index, im);
     }
 }
@@ -49,21 +49,21 @@ uint8_t insertIndex(IndexInfo *index, ImageInfo *image)
     }
     index->end = newNode;
     index->count++;
-    for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+    for (uint8_t workerId = 0; workerId < index->parralSearchWorker; workerId++)
     {
-        if (index->parallelSearchIndex[i] == NULL)
+        if (index->parallelSearchIndex[workerId] == NULL)
         {
-            index->parallelSearchIndex[i] = newNode;
+            index->parallelSearchIndex[workerId] = newNode;
             break;
         }
         if (index->count != index->parralSearchWorker && index->count % index->parralSearchWorker == 0)
         {
-            ChainNode *nextIndex = index->parallelSearchIndex[i];
-            for (uint8_t offset = 0; offset < i; offset++)
+            ChainNode *nextIndex = index->parallelSearchIndex[workerId];
+            for (uint8_t offset = 0; offset < workerId; offset++)
             {
                 nextIndex = nextIndex->next;
             }
-            index->parallelSearchIndex[i] = nextIndex;
+            index->parallelSearchIndex[workerId] = nextIndex;
         }
     }
     return 1;
@@ -102,21 +102,20 @@ uint64_t searchNode(ChainNode *start, ChainNode *end, uint64_t hash, uint8_t *di
 
 uint64_t startSearch(pHashStore hash)
 {
-    for (uint8_t i = 0; i < 4; i++)
+    for (uint8_t hashSection = 0; hashSection < 4; hashSection++)
     {
-        IndexInfo *indexList = indexStorage[i];
-        if (indexList[hash.section[i]].count > 0)
+        IndexInfo *index = &indexStorage[hashSection][hash.section[hashSection]];
+        if (index->count > 0)
         {
-            IndexInfo *index = &indexList[hash.section[i]];
             launchWorker(index, hash.hash);
             uint64_t result;
             uint8_t currentDistance = 64;
-            for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+            for (uint8_t workerId = 0; workerId < index->parralSearchWorker; workerId++)
             {
-                SearchResult rs = parallelSearchResult[i];
-                if (rs.distance < currentDistance)
+                SearchResult partResult = parallelSearchResult[workerId];
+                if (partResult.distance < currentDistance)
                 {
-                    result = rs.id;
+                    result = partResult.id;
                 }
             }
             free(parallelSearchResult);
@@ -130,17 +129,17 @@ void launchWorker(IndexInfo *index, uint64_t hash)
 {
     parallelSearchResult = calloc(index->parralSearchWorker, sizeof(SearchResult));
     pthread_t threadId[index->parralSearchWorker];
-    for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+    for (uint8_t workerId = 0; workerId < index->parralSearchWorker; workerId++)
     {
         ThreadArgv *argv = calloc(1, sizeof(ThreadArgv));
         argv->index = index;
-        argv->workerId = i;
+        argv->workerId = workerId;
         argv->hash = hash;
-        pthread_create(&threadId[i], NULL, searchThread, argv);
+        pthread_create(&threadId[workerId], NULL, searchThread, argv);
     }
-    for (uint8_t i = 0; i < index->parralSearchWorker; i++)
+    for (uint8_t workerId = 0; workerId < index->parralSearchWorker; workerId++)
     {
-        pthread_join(threadId[i], NULL);
+        pthread_join(threadId[workerId], NULL);
     }
 }
 
@@ -153,12 +152,9 @@ void *searchThread(void *argv)
     uint8_t distance;
     ChainNode *start = index->parallelSearchIndex[workerId];
     ChainNode *end = index->parallelSearchIndex[workerId + 1];
-    if (start == NULL)
-    {
-        parallelSearchResult[workerId].id = 0;
-        parallelSearchResult[workerId].distance = 64;
-    }
-    else
+    parallelSearchResult[workerId].id = 0;
+    parallelSearchResult[workerId].distance = 64;
+    if (start != NULL)
     {
         uint64_t result = searchNode(start, end, hash, &distance);
         parallelSearchResult[workerId].id = result;
