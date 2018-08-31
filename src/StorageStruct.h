@@ -43,7 +43,7 @@ typedef struct SearchResult
     uint8_t distance;
 } SearchResult;
 
-void insertData(uint64_t id, uint64_t phash);
+uint8_t insertData(uint64_t id, uint64_t phash);
 uint8_t initIndex(IndexInfo *index);
 uint8_t insertIndex(IndexInfo *index, ImageInfo *image);
 uint64_t searchNode(ChainNode *start, ChainNode *end, uint64_t hash, uint8_t *distance);

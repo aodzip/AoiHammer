@@ -6,7 +6,7 @@
 static IndexInfo indexStorage[4][0xFFFF];
 static SearchResult *parallelSearchResult;
 
-void insertData(uint64_t id, uint64_t phash)
+uint8_t insertData(uint64_t id, uint64_t phash)
 {
     ImageInfo *im = calloc(1, sizeof(ImageInfo));
     im->id = id;
@@ -14,8 +14,12 @@ void insertData(uint64_t id, uint64_t phash)
     for (uint8_t hashSection = 0; hashSection < 4; hashSection++)
     {
         IndexInfo *index = &indexStorage[hashSection][im->phash.section[hashSection]];
-        insertIndex(index, im);
+        if (!insertIndex(index, im))
+        {
+            return 0;
+        }
     }
+    return 1;
 }
 
 uint8_t initIndex(IndexInfo *index)

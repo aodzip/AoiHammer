@@ -4,6 +4,17 @@
         "searchworker.h": "c",
         "storagestruct.h": "c",
         "stdlib.h": "c",
-        "in.h": "c"
+        "in.h": "c",
+        "stdio.h": "c",
+        "unistd.h": "c",
+        "ioctl.h": "c",
+        "time.h": "c",
+        "string.h": "c",
+        "socket.h": "c",
+        "cstdlib": "c",
+        "mongoc.h": "c",
+        "mongoconn.h": "c",
+        "socketserver.h": "c",
+        "inet.h": "c"
     }
 }
