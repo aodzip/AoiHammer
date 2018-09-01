@@ -174,5 +174,5 @@ void socketMain(int descriptor)
         sprintf(buffer, "unknown\n");
     }
     }
-    write(descriptor, buffer, sizeof(buffer));
+    write(descriptor, buffer, strlen(buffer));
 }
