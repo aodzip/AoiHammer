@@ -14,7 +14,7 @@
 
 #include <sys/param.h>
 
-static uint8_t serverRunning;
+static volatile uint8_t serverRunning = 1;
 
 void forkDaemon()
 {
@@ -50,9 +50,18 @@ void forkDaemon()
     }
 }
 
+void sigintHandler(int sig)
+{
+    signal(sig, SIG_IGN);
+    serverRunning = 0;
+    signal(SIGINT, sigintHandler);
+}
+
 int main(int argc, char **argv)
 {
-    forkDaemon();
+    // printf("Server Fork to daemon.\n");
+    // forkDaemon();
+    signal(SIGINT, sigintHandler);
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;
@@ -72,8 +81,7 @@ int main(int argc, char **argv)
     fd_set socketDescriptorSet;
     FD_ZERO(&socketDescriptorSet);
     FD_SET(serverSocket, &socketDescriptorSet);
-    serverRunning = 1;
-    do
+    while (serverRunning)
     {
         fd_set socketDescriptorSetCopy = socketDescriptorSet;
         int selectCount = select(FD_SETSIZE, &socketDescriptorSetCopy, NULL, NULL, NULL);
@@ -109,7 +117,14 @@ int main(int argc, char **argv)
                 }
             }
         }
-    } while (serverRunning);
+    }
+    for (int descriptor = FD_SETSIZE; descriptor >= 0; descriptor--)
+    {
+        if (FD_ISSET(descriptor, &socketDescriptorSet))
+        {
+            close(descriptor);
+        }
+    }
 }
 
 void socketMain(int descriptor)
