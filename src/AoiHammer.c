@@ -143,11 +143,11 @@ void socketMain(int descriptor)
         // printf("insertId: %lu insertHash: %ld\n", insertId, insertHash);
         if (insertData(insertId, insertHash))
         {
-            sprintf(buffer, "ok\n");
+            sprintf(buffer, "ok");
         }
         else
         {
-            sprintf(buffer, "error\n");
+            sprintf(buffer, "error");
         }
     }
     break;
@@ -159,19 +159,19 @@ void socketMain(int descriptor)
         phash.hash = queryHash;
         uint64_t resultId = startSearch(phash);
         memset(buffer, 0, sizeof(buffer));
-        sprintf(buffer, "%lu\n", resultId);
+        sprintf(buffer, "%lu", resultId);
     }
     break;
     case 'Q':
     {
         serverRunning = 0;
-        sprintf(buffer, "shutdown\n");
+        sprintf(buffer, "shutdown");
     }
     break;
     default:
     {
         memset(buffer, 0, sizeof(buffer));
-        sprintf(buffer, "unknown\n");
+        sprintf(buffer, "unknown");
     }
     }
     write(descriptor, buffer, strlen(buffer));
