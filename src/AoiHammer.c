@@ -14,59 +14,65 @@
 
 #include <sys/param.h>
 
+uint8_t cpuCount = 1;
 static volatile uint8_t serverRunning = 1;
 
-void forkDaemon()
-{
-    int pid;
-    pid = fork();
-    if (pid)
-    {
-        exit(0);
-    }
-    else
-    {
-        if (pid < 0)
-        {
-            exit(1);
-        }
-    }
-    setsid();
-    pid = fork();
-    if (pid)
-    {
-        exit(0);
-    }
-    else
-    {
-        if (pid < 0)
-        {
-            exit(1);
-        }
-    }
-    for (uint32_t i = 0; i < NOFILE; ++i)
-    {
-        close(i);
-    }
-}
-
-void sigintHandler(int sig)
-{
-    signal(sig, SIG_IGN);
-    serverRunning = 0;
-    signal(SIGINT, sigintHandler);
-}
+void loadFromFile(const char *fileName);
+void socketMain(int descriptor);
+void socketServer(int listenPort);
+void forkDaemon();
+void sigintHandler(int sig);
 
 int main(int argc, char **argv)
 {
     // printf("Server Fork to daemon.\n");
     // forkDaemon();
+    cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
+    loadFromFile("hashs.export");
     signal(SIGINT, sigintHandler);
+    socketServer(8023);
+}
+
+void loadFromFile(const char *fileName)
+{
+    FILE *fileDescriptor = fopen(fileName, "rb");
+    if (fileDescriptor == NULL)
+    {
+        printf("File: %s not found\n", fileName);
+        return;
+    }
+    char buffer[512];
+    time_t startTime = time(NULL);
+    time_t lastTime = 0;
+    time_t lastId = 0;
+    while (fgets(buffer, sizeof(buffer), fileDescriptor))
+    {
+        uint32_t id;
+        int64_t hash;
+        sscanf(buffer, "{\"_id\":%u,\"hash\":{\"$numberLong\":\"%ld\"}}", &id, &hash);
+        uint32_t currentTime = time(NULL);
+        if (currentTime - lastTime > 0)
+        {
+            printf("\r\x1B[KCurrent: [id: %u hash: %ld] Speed: %lu hash/s", id, hash, id - lastId);
+            fflush(stdout);
+            lastTime = currentTime;
+            lastId = id;
+        }
+        if (!insertData(id, hash))
+        {
+            printf("\nError on Load %u:%ld\n", id, hash);
+        }
+    }
+    printf("\nLoad Finished in %lu second(s)\n", time(NULL) - startTime);
+}
+
+void socketServer(int listenPort)
+{
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(8023);
+    serverAddress.sin_port = htons(listenPort);
     serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1)
     {
@@ -129,19 +135,22 @@ int main(int argc, char **argv)
 
 void socketMain(int descriptor)
 {
-    char buffer[128];
+    char buffer[256];
     memset(buffer, 0, sizeof(buffer));
     read(descriptor, buffer, sizeof(buffer) - 1);
     switch (buffer[0])
     {
     case 'A':
     {
-        uint64_t insertId;
+        uint32_t insertId;
         int64_t insertHash;
-        sscanf(buffer + 1, "%lu %ld", &insertId, &insertHash);
+        sscanf(buffer + 1, "%u %ld", &insertId, &insertHash);
         memset(buffer, 0, sizeof(buffer));
-        // printf("insertId: %lu insertHash: %ld\n", insertId, insertHash);
-        if (insertData(insertId, insertHash))
+        if (insertId == 0)
+        {
+            sprintf(buffer, "error");
+        }
+        else if (insertData(insertId, insertHash))
         {
             sprintf(buffer, "ok");
         }
@@ -155,11 +164,13 @@ void socketMain(int descriptor)
     {
         int64_t queryHash;
         sscanf(buffer + 1, "%ld", &queryHash);
-        pHashStore phash;
-        phash.hash = queryHash;
-        uint64_t resultId = startSearch(phash);
+        SearchResult result[10];
+        startSearch(queryHash, 10, result);
         memset(buffer, 0, sizeof(buffer));
-        sprintf(buffer, "%lu", resultId);
+        for (uint8_t i = 0; i < 10; i++)
+        {
+            sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
+        }
     }
     break;
     case 'Q':
@@ -175,4 +186,45 @@ void socketMain(int descriptor)
     }
     }
     write(descriptor, buffer, strlen(buffer));
+}
+
+void forkDaemon()
+{
+    int pid;
+    pid = fork();
+    if (pid)
+    {
+        exit(0);
+    }
+    else
+    {
+        if (pid < 0)
+        {
+            exit(1);
+        }
+    }
+    setsid();
+    pid = fork();
+    if (pid)
+    {
+        exit(0);
+    }
+    else
+    {
+        if (pid < 0)
+        {
+            exit(1);
+        }
+    }
+    for (uint32_t i = 0; i < NOFILE; ++i)
+    {
+        close(i);
+    }
+}
+
+void sigintHandler(int sig)
+{
+    signal(sig, SIG_IGN);
+    serverRunning = 0;
+    signal(SIGINT, sigintHandler);
 }

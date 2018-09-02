@@ -15,6 +15,7 @@
         "mongoc.h": "c",
         "mongoconn.h": "c",
         "socketserver.h": "c",
-        "inet.h": "c"
+        "inet.h": "c",
+        "pthread.h": "c"
     }
 }
