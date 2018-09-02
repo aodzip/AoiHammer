@@ -165,7 +165,10 @@ void socketMain(int descriptor)
         int64_t queryHash;
         sscanf(buffer + 1, "%ld", &queryHash);
         SearchResult result[10];
+        clock_t cBegin = clock();
         startSearch(queryHash, 10, result);
+        clock_t cEnd = clock();
+        printf("Execution time: %fs\n", ((double)cEnd - cBegin) / CLOCKS_PER_SEC);
         memset(buffer, 0, sizeof(buffer));
         for (uint8_t i = 0; i < 10; i++)
         {
