@@ -6,12 +6,13 @@
 #include <pthread.h>
 
 static IndexInfo indexStorage[4][0xFFFF + 1];
+static IndexInfo fullChain;
 
-void searchNode(uint64_t hash, ChainNode *start, ChainNode *end, SearchResult *result, uint8_t resultCount);
+void searchNode(uint64_t hash, ChainNode *start, ChainNode *end, SearchResultStorage *result);
 void *searchThread(void *argv);
 uint8_t initIndex(IndexInfo *index);
 uint8_t insertIndex(IndexInfo *index, ImageInfo *image);
-void bubbleSort(SearchResult *resultArray, uint8_t resultCount);
+void bubbleSort(SearchResult *resultArray, uint32_t resultCount);
 
 uint8_t insertData(uint32_t id, uint64_t hash)
 {
@@ -29,6 +30,10 @@ uint8_t insertData(uint32_t id, uint64_t hash)
         {
             return 0;
         }
+    }
+    if (!insertIndex(&fullChain, im))
+    {
+        return 0;
     }
     return 1;
 }
@@ -86,6 +91,19 @@ uint8_t insertIndex(IndexInfo *index, ImageInfo *image)
     return 1;
 }
 
+uint8_t insertSearchResult(SearchResultStorage *storage, SearchResult data)
+{
+    SearchResult *newPtr = realloc(storage->storage, (storage->count + 1) * sizeof(SearchResult));
+    if (newPtr == NULL)
+    {
+        return 0;
+    }
+    storage->storage = newPtr;
+    storage->storage[storage->count] = data;
+    storage->count++;
+    return 1;
+}
+
 uint8_t hammingDistance(uint64_t hashA, uint64_t hashB)
 {
     int distance = 0;
@@ -98,7 +116,7 @@ uint8_t hammingDistance(uint64_t hashA, uint64_t hashB)
     return distance;
 }
 
-void bubbleSort(SearchResult *resultArray, uint8_t resultCount)
+void bubbleSort(SearchResult *resultArray, uint32_t resultCount)
 {
     for (uint8_t i = 0; i < resultCount - 1; i++)
     {
@@ -114,7 +132,65 @@ void bubbleSort(SearchResult *resultArray, uint8_t resultCount)
     }
 }
 
-uint8_t startSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage)
+void launchWorker(IndexInfo *index, HashStore hash, SearchResultStorage *resultStorage)
+{
+    pthread_t threadId[cpuCount];
+    for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
+    {
+        ThreadArgv *argv = calloc(1, sizeof(ThreadArgv));
+        argv->index = index;
+        argv->workerId = workerId;
+        argv->hash = hash.data;
+        argv->resultStorage = &resultStorage[workerId];
+        pthread_create(&threadId[workerId], NULL, searchThread, argv);
+    }
+    for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
+    {
+        pthread_join(threadId[workerId], NULL);
+    }
+}
+
+uint32_t searchIndex(IndexInfo *index, HashStore hash, SearchResult **collect)
+{
+    if (index->count)
+    {
+        SearchResultStorage parallelSearchResult[cpuCount];
+        memset(parallelSearchResult, 0, cpuCount * sizeof(SearchResultStorage));
+        launchWorker(index, hash, parallelSearchResult);
+        uint32_t searchResultCount = 0;
+        for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
+        {
+            searchResultCount += parallelSearchResult[workerId].count;
+        }
+        SearchResult *resultCollect = calloc(searchResultCount, sizeof(SearchResult));
+        uint32_t currentCollectIndex = 0;
+        for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
+        {
+            SearchResultStorage storage = parallelSearchResult[workerId];
+            memcpy(resultCollect + currentCollectIndex, storage.storage, storage.count * sizeof(SearchResult));
+            free(storage.storage);
+            currentCollectIndex += storage.count;
+        }
+        *collect = (SearchResult *)resultCollect;
+        return searchResultCount;
+    }
+    return 0;
+}
+
+uint8_t startFullSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage)
+{
+    HashStore hash;
+    hash.data = searchHash;
+    memset(resultStorage, 0, resultCount * sizeof(SearchResult));
+    SearchResult *resultCollect;
+    uint32_t searchResultCount = searchIndex(&fullChain, hash, &resultCollect);
+    bubbleSort(resultCollect, searchResultCount);
+    memcpy(resultStorage, resultCollect, (searchResultCount > resultCount ? resultCount : searchResultCount) * sizeof(SearchResult));
+    free(resultCollect);
+    return searchResultCount;
+}
+
+uint8_t startFastSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage)
 {
     HashStore hash;
     hash.data = searchHash;
@@ -122,44 +198,12 @@ uint8_t startSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resu
     for (uint8_t hashSection = 0; hashSection < 4; hashSection++)
     {
         IndexInfo *index = &indexStorage[hashSection][hash.section[hashSection]];
-        if (index->count)
-        {
-            SearchResult parallelSearchResult[cpuCount][resultCount];
-            for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
-            {
-                for (uint8_t currentId = 0; currentId < resultCount; currentId++)
-                {
-                    parallelSearchResult[workerId][currentId].id = 0;
-                    parallelSearchResult[workerId][currentId].distance = 64;
-                }
-            }
-            pthread_t threadId[cpuCount];
-            for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
-            {
-                ThreadArgv *argv = calloc(1, sizeof(ThreadArgv));
-                argv->index = index;
-                argv->workerId = workerId;
-                argv->hash = hash.data;
-                argv->resultStorage = parallelSearchResult[workerId];
-                argv->resultCount = resultCount;
-                pthread_create(&threadId[workerId], NULL, searchThread, argv);
-            }
-            for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
-            {
-                pthread_join(threadId[workerId], NULL);
-            }
-            SearchResult resultCollect[cpuCount * resultCount];
-            for (uint8_t workerId = 0; workerId < cpuCount; workerId++)
-            {
-                for (uint8_t currentId = 0; currentId < resultCount; currentId++)
-                {
-                    resultCollect[workerId * resultCount + currentId] = parallelSearchResult[workerId][currentId];
-                }
-            }
-            bubbleSort(resultCollect, cpuCount * resultCount);
-            memcpy(resultStorage, resultCollect, resultCount * sizeof(SearchResult));
-            return 1;
-        }
+        SearchResult *resultCollect;
+        uint32_t searchResultCount = searchIndex(index, hash, &resultCollect);
+        bubbleSort(resultCollect, searchResultCount);
+        memcpy(resultStorage, resultCollect, (searchResultCount > resultCount ? resultCount : searchResultCount) * sizeof(SearchResult));
+        free(resultCollect);
+        return 1;
     }
     return 0;
 }
@@ -170,29 +214,29 @@ void *searchThread(void *argv)
     IndexInfo *index = arg->index;
     uint8_t workerId = arg->workerId;
     uint64_t hash = arg->hash;
-    SearchResult *resultStorage = arg->resultStorage;
-    uint8_t resultCount = arg->resultCount;
+    SearchResultStorage *resultStorage = arg->resultStorage;
     ChainNode *start = index->parallelSearchIndex[workerId];
     ChainNode *end = index->parallelSearchIndex[workerId + 1];
     if (start != NULL)
     {
-        searchNode(hash, start, end, resultStorage, resultCount);
+        searchNode(hash, start, end, resultStorage);
     }
     free(argv);
     return ((void *)NULL);
 }
 
-void searchNode(uint64_t hash, ChainNode *start, ChainNode *end, SearchResult *resultStorage, uint8_t resultCount)
+void searchNode(uint64_t hash, ChainNode *start, ChainNode *end, SearchResultStorage *resultStorage)
 {
     ChainNode *current = start;
     do
     {
         uint8_t distance = hammingDistance(current->info->hash.data, hash);
-        if (distance < resultStorage[resultCount - 1].distance)
+        if (distance <= 10)
         {
-            resultStorage[resultCount - 1].distance = distance;
-            resultStorage[resultCount - 1].id = current->info->id;
-            bubbleSort(resultStorage, resultCount);
+            SearchResult result;
+            result.distance = distance;
+            result.id = current->info->id;
+            insertSearchResult(resultStorage, result);
         }
         current = current->next;
     } while (current != end);

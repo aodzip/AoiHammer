@@ -5,6 +5,7 @@ typedef struct ImageInfo ImageInfo;
 typedef struct ChainNode ChainNode;
 typedef struct IndexInfo IndexInfo;
 typedef struct SearchResult SearchResult;
+typedef struct SearchResultStorage SearchResultStorage;
 
 typedef union HashStore {
     uint64_t data;
@@ -35,9 +36,14 @@ typedef struct ThreadArgv
     IndexInfo *index;
     uint8_t workerId;
     uint64_t hash;
-    SearchResult *resultStorage;
-    uint8_t resultCount;
+    SearchResultStorage *resultStorage;
 } ThreadArgv;
+
+typedef struct SearchResultStorage
+{
+    uint32_t count;
+    SearchResult *storage;
+} SearchResultStorage;
 
 typedef struct SearchResult
 {
@@ -46,4 +52,5 @@ typedef struct SearchResult
 } SearchResult;
 
 uint8_t insertData(uint32_t id, uint64_t phash);
-uint8_t startSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage);
+uint8_t startFastSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage);
+uint8_t startFullSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage);

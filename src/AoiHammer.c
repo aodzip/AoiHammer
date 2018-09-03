@@ -1,9 +1,10 @@
 #include "AoiHammer.h"
 #include "StorageStruct.h"
+#include "TimeCalc.h"
 
 #include <stdio.h>
-#include <string.h>
 #include <time.h>
+#include <string.h>
 #include <stdlib.h>
 
 #include <netinet/in.h>
@@ -28,6 +29,21 @@ int main(int argc, char **argv)
     // printf("Server Fork to daemon.\n");
     // forkDaemon();
     cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
+    goto normal;
+    {
+        insertData(1, 0b11);
+        insertData(2, 0b1);
+        insertData(3, 0b111);
+        SearchResult result[10];
+        startFullSearch(1, 10, result);
+        for (uint8_t i = 0; i < 10; i++)
+        {
+            printf("%u:%u,", result[i].id, result[i].distance);
+        }
+        printf("\n");
+        return 0;
+    }
+normal:
     loadFromFile("hashs.export");
     signal(SIGINT, sigintHandler);
     socketServer(8023);
@@ -53,7 +69,7 @@ void loadFromFile(const char *fileName)
         uint32_t currentTime = time(NULL);
         if (currentTime - lastTime > 0)
         {
-            printf("\r\x1B[KCurrent: [id: %u hash: %ld] Speed: %lu hash/s", id, hash, id - lastId);
+            printf("\r\x1B[KCurrent: [id: %u hash: %ld] Speed: %lu id/s", id, hash, id - lastId);
             fflush(stdout);
             lastTime = currentTime;
             lastId = id;
@@ -137,7 +153,11 @@ void socketMain(int descriptor)
 {
     char buffer[256];
     memset(buffer, 0, sizeof(buffer));
-    read(descriptor, buffer, sizeof(buffer) - 1);
+    int readLength = read(descriptor, buffer, sizeof(buffer) - 1);
+    if (readLength <= 0)
+    {
+        return;
+    }
     switch (buffer[0])
     {
     case 'A':
@@ -162,13 +182,31 @@ void socketMain(int descriptor)
     break;
     case 'S':
     {
+        wallclock_t t;
         int64_t queryHash;
         sscanf(buffer + 1, "%ld", &queryHash);
         SearchResult result[10];
-        clock_t cBegin = clock();
-        startSearch(queryHash, 10, result);
-        clock_t cEnd = clock();
-        printf("Execution time: %fs\n", ((double)cEnd - cBegin) / CLOCKS_PER_SEC);
+        startTimeCalc(&t);
+        startFastSearch(queryHash, 10, result);
+        double execTime = getTimeCalc(&t);
+        printf("Execution time: %fs\n", execTime);
+        memset(buffer, 0, sizeof(buffer));
+        for (uint8_t i = 0; i < 10; i++)
+        {
+            sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
+        }
+    }
+    break;
+    case 'F':
+    {
+        wallclock_t t;
+        int64_t queryHash;
+        sscanf(buffer + 1, "%ld", &queryHash);
+        SearchResult result[10];
+        startTimeCalc(&t);
+        startFullSearch(queryHash, 10, result);
+        double execTime = getTimeCalc(&t);
+        printf("Execution time: %fs\n", execTime);
         memset(buffer, 0, sizeof(buffer));
         for (uint8_t i = 0; i < 10; i++)
         {
@@ -188,7 +226,11 @@ void socketMain(int descriptor)
         sprintf(buffer, "unknown");
     }
     }
-    write(descriptor, buffer, strlen(buffer));
+    int writeLength = write(descriptor, buffer, strlen(buffer));
+    if (writeLength <= 0)
+    {
+        printf("Write Socket Error\n");
+    }
 }
 
 void forkDaemon()
