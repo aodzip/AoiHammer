@@ -167,15 +167,15 @@ void socketMain(int descriptor)
         memset(buffer, 0, sizeof(buffer));
         if (insertId == 0)
         {
-            sprintf(buffer, "error");
+            sprintf(buffer, "error\r\n");
         }
         else if (insertData(insertId, insertHash))
         {
-            sprintf(buffer, "ok");
+            sprintf(buffer, "ok\r\n");
         }
         else
         {
-            sprintf(buffer, "error");
+            sprintf(buffer, "error\r\n");
         }
     }
     break;
@@ -194,6 +194,8 @@ void socketMain(int descriptor)
         {
             sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
         }
+        buffer[strlen(buffer) - 1] = 0;
+        sprintf(buffer, "%s\r\n", buffer);
     }
     break;
     case 'F':
@@ -211,18 +213,20 @@ void socketMain(int descriptor)
         {
             sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
         }
+        buffer[strlen(buffer) - 1] = 0;
+        sprintf(buffer, "%s\r\n", buffer);
     }
     break;
     case 'Q':
     {
         serverRunning = 0;
-        sprintf(buffer, "shutdown");
+        sprintf(buffer, "shutdown\r\n");
     }
     break;
     default:
     {
         memset(buffer, 0, sizeof(buffer));
-        sprintf(buffer, "unknown");
+        sprintf(buffer, "unknown\r\n");
     }
     }
     int writeLength = write(descriptor, buffer, strlen(buffer));
