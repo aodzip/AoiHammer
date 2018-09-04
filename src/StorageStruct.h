@@ -36,12 +36,14 @@ typedef struct ThreadArgv
     IndexInfo *index;
     uint8_t workerId;
     uint64_t hash;
+    uint8_t maxDistance;
     SearchResultStorage *resultStorage;
 } ThreadArgv;
 
 typedef struct SearchResultStorage
 {
     uint32_t count;
+    uint32_t realMem;
     SearchResult *storage;
 } SearchResultStorage;
 

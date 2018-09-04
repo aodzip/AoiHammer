@@ -24,26 +24,24 @@ void socketServer(int listenPort);
 void forkDaemon();
 void sigintHandler(int sig);
 
-int main(int argc, char **argv)
+int main()
 {
     // printf("Server Fork to daemon.\n");
     // forkDaemon();
     cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
-    goto normal;
-    {
-        insertData(1, 0b11);
-        insertData(2, 0b1);
-        insertData(3, 0b111);
-        SearchResult result[10];
-        startFullSearch(1, 10, result);
-        for (uint8_t i = 0; i < 10; i++)
-        {
-            printf("%u:%u,", result[i].id, result[i].distance);
-        }
-        printf("\n");
-        return 0;
-    }
-normal:
+    // {
+    //     insertData(1, 0b11);
+    //     insertData(2, 0b1);
+    //     insertData(3, 0b111);
+    //     SearchResult result[10];
+    //     startFullSearch(1, 10, result);
+    //     for (uint8_t i = 0; i < 10; i++)
+    //     {
+    //         printf("%u:%u,", result[i].id, result[i].distance);
+    //     }
+    //     printf("\n");
+    //     return 0;
+    // }
     loadFromFile("hashs.export");
     signal(SIGINT, sigintHandler);
     socketServer(8023);
@@ -84,6 +82,7 @@ void loadFromFile(const char *fileName)
 
 void socketServer(int listenPort)
 {
+    printf("SearchEngine listen on port: %d\n", listenPort);
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;
