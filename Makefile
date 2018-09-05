@@ -1,7 +1,7 @@
 PROJECT = aoihammer
 SOURCEDIR = ./src
 CC = gcc
-CFLAGS = -flto -Wall -Wextra -I $(SOURCEDIR) -Ofast
+CFLAGS = -Wall -Wextra -I $(SOURCEDIR) -flto -Ofast
 LINKS = -lpthread 
 
 SOURCES = $(shell find "$(SOURCEDIR)" -name "*.cpp" -o -name "*.c" -o -name "*.S")

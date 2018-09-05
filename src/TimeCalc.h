@@ -1,5 +1,5 @@
 #pragma once
-typedef struct timeval wallclock_t;
+typedef struct timeval timeCalc;
 
-void startTimeCalc(wallclock_t *const tptr);
-double getTimeCalc(wallclock_t *const tptr);
+void startTimeCalc(timeCalc *const tptr);
+double getTimeCalc(timeCalc *const tptr);

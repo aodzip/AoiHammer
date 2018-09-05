@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
@@ -20,7 +21,7 @@ static volatile uint8_t serverRunning = 1;
 
 void loadFromFile(const char *fileName);
 void socketMain(int descriptor);
-void socketServer(int listenPort);
+void socketServer(const char *listenAddr, int listenPort);
 void forkDaemon();
 void sigintHandler(int sig);
 
@@ -35,23 +36,11 @@ int main()
 {
     // printf("Server Fork to daemon.\n");
     // forkDaemon();
+    printf("AoiHammer SearchEngine v0.1\n");
     cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
-    // {
-    //     insertData(1, 0b11);
-    //     insertData(2, 0b1);
-    //     insertData(3, 0b111);
-    //     SearchResult result[10];
-    //     startFullSearch(1, 10, result);
-    //     for (uint8_t i = 0; i < 10; i++)
-    //     {
-    //         printf("%u:%u,", result[i].id, result[i].distance);
-    //     }
-    //     printf("\n");
-    //     return 0;
-    // }
     loadFromFile("hashs.export");
     signal(SIGINT, sigintHandler);
-    socketServer(8023);
+    socketServer("127.0.0.1", 8023);
 }
 
 void loadFromFile(const char *fileName)
@@ -59,43 +48,42 @@ void loadFromFile(const char *fileName)
     FILE *fileDescriptor = fopen(fileName, "rb");
     if (fileDescriptor == NULL)
     {
-        printf("File: %s not found\n", fileName);
+        printf("Persistence data file: %s not found\n", fileName);
         return;
     }
+    printf("Start loading persistence data...\n");
     char buffer[512];
     time_t startTime = time(NULL);
-    time_t lastTime = 0;
-    time_t lastId = 0;
+    uint16_t counter = 0;
+    uint32_t id;
+    int64_t hash;
     while (fgets(buffer, sizeof(buffer), fileDescriptor))
     {
-        uint32_t id;
-        int64_t hash;
         sscanf(buffer, "{\"_id\":%u,\"hash\":{\"$numberLong\":\"%ld\"}}", &id, &hash);
-        uint32_t currentTime = time(NULL);
-        if (currentTime - lastTime > 0)
+        if (!counter)
         {
-            printf("\r\x1B[KCurrent: [id: %u hash: %ld] Speed: %lu id/s", id, hash, id - lastId);
+            printf("\r\x1B[KCurrent: [id: %u hash: %ld]", id, hash);
             fflush(stdout);
-            lastTime = currentTime;
-            lastId = id;
         }
         if (!insertData(id, hash))
         {
             printf("\nError on Load %u:%ld\n", id, hash);
         }
+        counter++;
     }
-    printf("\nLoad Finished in %lu second(s)\n", time(NULL) - startTime);
+    printf("\r\x1B[KCurrent: [id: %u hash: %ld]", id, hash);
+    printf("\nLoad finished in %lu seconds\n", time(NULL) - startTime);
 }
 
-void socketServer(int listenPort)
+void socketServer(const char *listenAddr, int listenPort)
 {
-    printf("SearchEngine listen on port: %d\n", listenPort);
+    printf("Server listening on %s:%d\n", listenAddr, listenPort);
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(listenPort);
-    serverAddress.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddress.sin_addr.s_addr = inet_addr(listenAddr);
     if (bind(serverSocket, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) == -1)
     {
         perror("Unable to bind port");
@@ -188,12 +176,12 @@ void socketMain(int descriptor)
     break;
     case 'S':
     {
-        wallclock_t t;
+        timeCalc t;
         int64_t queryHash;
         sscanf(buffer + 1, "%ld", &queryHash);
         SearchResult result[10];
         startTimeCalc(&t);
-        startFastSearch(queryHash, 10, result);
+        startFastSearch(queryHash, 10, 10, result);
         double execTime = getTimeCalc(&t);
         printf("Execution time: %fs\n", execTime);
         memset(buffer, 0, sizeof(buffer));
@@ -207,12 +195,12 @@ void socketMain(int descriptor)
     break;
     case 'F':
     {
-        wallclock_t t;
+        timeCalc t;
         int64_t queryHash;
         sscanf(buffer + 1, "%ld", &queryHash);
         SearchResult result[10];
         startTimeCalc(&t);
-        startFullSearch(queryHash, 10, result);
+        startFullSearch(queryHash, 10, 10, result);
         double execTime = getTimeCalc(&t);
         printf("Execution time: %fs\n", execTime);
         memset(buffer, 0, sizeof(buffer));

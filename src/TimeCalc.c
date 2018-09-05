@@ -2,12 +2,12 @@
 #include <sys/time.h>
 #include <time.h>
 
-void startTimeCalc(wallclock_t *const tptr)
+void startTimeCalc(timeCalc *const tptr)
 {
     gettimeofday(tptr, NULL);
 }
 
-double getTimeCalc(wallclock_t *const tptr)
+double getTimeCalc(timeCalc *const tptr)
 {
     struct timeval now;
     gettimeofday(&now, NULL);

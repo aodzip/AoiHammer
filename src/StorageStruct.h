@@ -54,5 +54,5 @@ typedef struct SearchResult
 } SearchResult;
 
 uint8_t insertData(uint32_t id, uint64_t phash);
-uint8_t startFastSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage);
-uint8_t startFullSearch(uint64_t searchHash, uint8_t resultCount, SearchResult *resultStorage);
+void startFastSearch(uint64_t searchHash, uint8_t maxDistance, uint8_t resultCount, SearchResult *resultStorage);
+void startFullSearch(uint64_t searchHash, uint8_t maxDistance, uint8_t resultCount, SearchResult *resultStorage);
