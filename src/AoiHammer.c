@@ -206,9 +206,9 @@ void socketServer(const char *listenAddr, int listenPort)
 
 void socketMain(int descriptor)
 {
-    char buffer[256];
-    memset(buffer, 0, sizeof(buffer));
-    int readLength = read(descriptor, buffer, sizeof(buffer) - 1);
+    char *buffer;
+    buffer = calloc(128, sizeof(char));
+    int readLength = read(descriptor, buffer, 128 * sizeof(char));
     if (readLength <= 0)
     {
         return;
@@ -221,7 +221,6 @@ void socketMain(int descriptor)
         int64_t insertHash = 0;
         sscanf(buffer + 1, "%u %ld", &insertId, &insertHash);
         savePersistenceFile(insertId, insertHash);
-        memset(buffer, 0, sizeof(buffer));
         if (insertId == 0)
         {
             sprintf(buffer, "error\r\n");
@@ -240,14 +239,17 @@ void socketMain(int descriptor)
     {
         timeCalc t;
         int64_t queryHash;
-        sscanf(buffer + 1, "%ld", &queryHash);
-        SearchResult result[10];
+        uint8_t maxDistance;
+        uint8_t resultCount;
+        sscanf(buffer + 1, "%hhu %hhu %ld", &maxDistance, &resultCount, &queryHash);
+        SearchResult result[resultCount];
         startTimeCalc(&t);
-        startFastSearch(queryHash, 10, 10, result);
+        startFastSearch(queryHash, maxDistance, resultCount, result);
         double execTime = getTimeCalc(&t);
         printf("Fast Search: %ld | Execution time: %fs\n", queryHash, execTime);
-        memset(buffer, 0, sizeof(buffer));
-        for (uint8_t i = 0; i < 10; i++)
+        free(buffer);
+        buffer = calloc(14 * resultCount + 1, sizeof(char));
+        for (uint8_t i = 0; i < resultCount; i++)
         {
             sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
         }
@@ -259,14 +261,17 @@ void socketMain(int descriptor)
     {
         timeCalc t;
         int64_t queryHash;
-        sscanf(buffer + 1, "%ld", &queryHash);
-        SearchResult result[10];
+        uint8_t maxDistance;
+        uint8_t resultCount;
+        sscanf(buffer + 1, "%hhu %hhu %ld", &maxDistance, &resultCount, &queryHash);
+        SearchResult result[resultCount];
         startTimeCalc(&t);
-        startFullSearch(queryHash, 10, 10, result);
+        startFullSearch(queryHash, maxDistance, resultCount, result);
         double execTime = getTimeCalc(&t);
         printf("Full Search: %ld | Execution time: %fs\n", queryHash, execTime);
-        memset(buffer, 0, sizeof(buffer));
-        for (uint8_t i = 0; i < 10; i++)
+        free(buffer);
+        buffer = calloc(14 * resultCount + 1, sizeof(char));
+        for (uint8_t i = 0; i < resultCount; i++)
         {
             sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
         }
@@ -282,7 +287,6 @@ void socketMain(int descriptor)
     break;
     default:
     {
-        memset(buffer, 0, sizeof(buffer));
         sprintf(buffer, "unknown\r\n");
     }
     }
@@ -291,6 +295,8 @@ void socketMain(int descriptor)
     {
         printf("Write Socket Error\n");
     }
+    free(buffer);
+    buffer = NULL;
 }
 
 void forkDaemon()
