@@ -17,6 +17,7 @@
         "socketserver.h": "c",
         "inet.h": "c",
         "pthread.h": "c",
-        "timecalc.h": "c"
+        "timecalc.h": "c",
+        "linuxlog.h": "c"
     }
 }

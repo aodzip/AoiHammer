@@ -1,5 +1,6 @@
 #include "AoiHammer.h"
 #include "StorageStruct.h"
+#include "LinuxLog.h"
 #include "TimeCalc.h"
 
 #include <stdio.h>
@@ -11,7 +12,6 @@
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/select.h>
-#include <fcntl.h>
 #include <unistd.h>
 
 #include <sys/param.h>
@@ -19,11 +19,14 @@
 uint8_t cpuCount = 1;
 static volatile uint8_t serverRunning = 1;
 
-void loadFromFile(const char *fileName);
-void socketMain(int descriptor);
-void socketServer(const char *listenAddr, int listenPort);
-void forkDaemon();
-void sigintHandler(int sig);
+static const char *optString = "dl:p:f:h?";
+struct globalArgs_t
+{
+    uint8_t isDaemon;
+    char *listenAddr;
+    uint16_t listenPort;
+    char *persistenceFile;
+} globalArgs;
 
 /*
 S -7705324701675607121
@@ -32,54 +35,112 @@ S -4210548948686533907
 F -4210548948686533907
 */
 
-int main()
+int main(int argc, char *argv[])
 {
-    // printf("Server Fork to daemon.\n");
-    // forkDaemon();
-    printf("AoiHammer SearchEngine v0.1\n");
+    globalArgs.isDaemon = 0;
+    globalArgs.listenAddr = "127.0.0.1";
+    globalArgs.listenPort = 8023;
+    globalArgs.persistenceFile = "hashs.export";
+    int opt = getopt(argc, argv, optString);
+    while (opt != -1)
+    {
+        switch (opt)
+        {
+        case 'd':
+            globalArgs.isDaemon = 1;
+            break;
+        case 'l':
+            globalArgs.listenAddr = optarg;
+            break;
+        case 'p':
+            globalArgs.listenPort = atoi(optarg);
+            break;
+        case 'f':
+            globalArgs.persistenceFile = optarg;
+            break;
+        case 'h':
+        case '?':
+        {
+            printf("AoiHammer: Hamming distance search engine\r\n");
+            printf("Usage: %s [OPTIONS]\r\n", argv[0]);
+            printf("\t -d Running in daemon mode.\r\n");
+            printf("\t -l [ADDR] Server listen address. Default: 127.0.0.1\r\n");
+            printf("\t -p [PORT] Server listen port. Default: 8023\r\n");
+            printf("\t -f [FILENAME] Persisten file path. Default: ./hashs.export\r\n");
+            exit(EXIT_FAILURE);
+        }
+        break;
+        }
+        opt = getopt(argc, argv, optString);
+    }
+    if (globalArgs.isDaemon)
+    {
+        forkDaemon();
+        tolog(&stdout);
+        tolog(&stderr);
+    }
+    printf("AoiHammer SearchEngine v0.1%s", "\n");
     cpuCount = sysconf(_SC_NPROCESSORS_ONLN);
-    loadFromFile("hashs.export");
-    signal(SIGINT, sigintHandler);
-    socketServer("127.0.0.1", 8023);
+    loadPersistenceFile();
+    socketServer(globalArgs.listenAddr, globalArgs.listenPort);
 }
 
-void loadFromFile(const char *fileName)
+void savePersistenceFile(uint32_t id, uint64_t hash)
 {
-    FILE *fileDescriptor = fopen(fileName, "rb");
-    if (fileDescriptor == NULL)
-    {
-        printf("Persistence data file: %s not found\n", fileName);
-        return;
-    }
-    printf("Start loading persistence data...\n");
+    FILE *fileDescriptor = fopen(globalArgs.persistenceFile, "a+");
+    fseek(fileDescriptor, 0, SEEK_END);
+    char buffer[512];
+    sprintf(buffer, "{\"_id\":%u,\"hash\":{\"$numberLong\":\"%ld\"}}\n", id, hash);
+    fputs(buffer, fileDescriptor);
+    fclose(fileDescriptor);
+}
+
+void loadPersistenceFile()
+{
     char buffer[512];
     time_t startTime = time(NULL);
-    uint16_t counter = 0;
+    uint32_t counter = 0;
     uint32_t id;
     int64_t hash;
+    char *prefix = "\r\x1B[K";
+    if (globalArgs.isDaemon)
+    {
+        prefix = "";
+    }
+    FILE *fileDescriptor = fopen(globalArgs.persistenceFile, "r");
+    if (fileDescriptor == NULL)
+    {
+        printf("Persistence data file: %s not found\n", globalArgs.persistenceFile);
+        return;
+    }
+    printf("Start loading persistence data...%s", "\n");
+
     while (fgets(buffer, sizeof(buffer), fileDescriptor))
     {
         sscanf(buffer, "{\"_id\":%u,\"hash\":{\"$numberLong\":\"%ld\"}}", &id, &hash);
-        if (!counter)
+        if (counter & 131072)
         {
-            printf("\r\x1B[KCurrent: [id: %u hash: %ld]", id, hash);
+            printf("%sCurrent: [id: %u hash: %ld]", prefix, id, hash);
             fflush(stdout);
+            counter = 0;
         }
+        counter++;
         if (!insertData(id, hash))
         {
             printf("\nError on Load %u:%ld\n", id, hash);
         }
-        counter++;
     }
-    printf("\r\x1B[KCurrent: [id: %u hash: %ld]", id, hash);
-    printf("\nLoad finished in %lu seconds\n", time(NULL) - startTime);
+    fclose(fileDescriptor);
+    printf("%sCurrent: [id: %u hash: %ld]\n", prefix, id, hash);
+    printf("Load finished in %lu seconds\n", time(NULL) - startTime);
 }
 
 void socketServer(const char *listenAddr, int listenPort)
 {
     printf("Server listening on %s:%d\n", listenAddr, listenPort);
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    fcntl(serverSocket, F_SETFL, SO_REUSEADDR | SO_REUSEPORT);
+    int optVal = 1;
+    setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &optVal, sizeof(optVal));
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(listenPort);
@@ -134,7 +195,7 @@ void socketServer(const char *listenAddr, int listenPort)
             }
         }
     }
-    for (int descriptor = FD_SETSIZE; descriptor >= 0; descriptor--)
+    for (int descriptor = 0; descriptor < FD_SETSIZE; descriptor++)
     {
         if (FD_ISSET(descriptor, &socketDescriptorSet))
         {
@@ -156,9 +217,10 @@ void socketMain(int descriptor)
     {
     case 'A':
     {
-        uint32_t insertId;
-        int64_t insertHash;
+        uint32_t insertId = 0;
+        int64_t insertHash = 0;
         sscanf(buffer + 1, "%u %ld", &insertId, &insertHash);
+        savePersistenceFile(insertId, insertHash);
         memset(buffer, 0, sizeof(buffer));
         if (insertId == 0)
         {
@@ -183,7 +245,7 @@ void socketMain(int descriptor)
         startTimeCalc(&t);
         startFastSearch(queryHash, 10, 10, result);
         double execTime = getTimeCalc(&t);
-        printf("Execution time: %fs\n", execTime);
+        printf("Fast Search: %ld | Execution time: %fs\n", queryHash, execTime);
         memset(buffer, 0, sizeof(buffer));
         for (uint8_t i = 0; i < 10; i++)
         {
@@ -202,7 +264,7 @@ void socketMain(int descriptor)
         startTimeCalc(&t);
         startFullSearch(queryHash, 10, 10, result);
         double execTime = getTimeCalc(&t);
-        printf("Execution time: %fs\n", execTime);
+        printf("Full Search: %ld | Execution time: %fs\n", queryHash, execTime);
         memset(buffer, 0, sizeof(buffer));
         for (uint8_t i = 0; i < 10; i++)
         {
@@ -263,11 +325,4 @@ void forkDaemon()
     {
         close(i);
     }
-}
-
-void sigintHandler(int sig)
-{
-    signal(sig, SIG_IGN);
-    serverRunning = 0;
-    signal(SIGINT, sigintHandler);
 }
