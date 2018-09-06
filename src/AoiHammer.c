@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
             printf("\t -d Running in daemon mode.\r\n");
             printf("\t -l [ADDR] Server listen address. Default: 127.0.0.1\r\n");
             printf("\t -p [PORT] Server listen port. Default: 8023\r\n");
-            printf("\t -f [FILENAME] Persisten file path. Default: ./hashs.export\r\n");
+            printf("\t -f [FILENAME] Persistence file path. Default: ./hashs.export\r\n");
             exit(EXIT_FAILURE);
         }
         break;
