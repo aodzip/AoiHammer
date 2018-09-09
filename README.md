@@ -1,5 +1,7 @@
 # AoiHammer
 用于64bit长度汉明距离搜索设计的多线程全内存搜索引擎
+
+它预期用于诸如aHash pHash dHash以图搜图场景 
 ## 编译
 标准make编译，依赖libpthread
 ## 启动参数
