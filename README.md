@@ -45,8 +45,28 @@ Q
 shutdown
 
 ## 持久化文件
-该文件会在增加
+该文件会在增加索引指令执行时更新
 ### 格式
 兼容mongodb export格式
 ### 例子
 {"_id":%u,"hash":{"$numberLong":"%ld"}}\n
+
+## BenchMark
+CPU: Intel i7-8550U
+
+OS: Ubuntu 18.04 LTS
+
+数据量: 36112000
+
+         AoiHammer SearchEngine v0.1
+         Start loading persistence data...
+         Current: [id: 70464644 hash: -4607711900727770310]
+         Load finished in 88 seconds
+         Server listening on 127.0.0.1:8023
+         Search: -7705324701675607121 | Execution time: 0.316674s
+         Search: -4210548948686533907 | Execution time: 0.014376s
+ 
+第一次为Hash表未命中，完整遍历全部数据（来自于一个大部分涂抹的图片样本）
+
+第二次为Hash表快速索引命中（绝大部分的缩略图搜原图，小型水印场景）
+
