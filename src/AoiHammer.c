@@ -30,9 +30,7 @@ struct globalArgs_t
 
 /*
 S 10 5 -7705324701675607121
-F 10 5 -7705324701675607121
 S 10 5 -4210548948686533907
-F 10 5 -4210548948686533907
 */
 
 int main(int argc, char *argv[])
@@ -221,13 +219,16 @@ void socketMain(int descriptor)
         int64_t insertHash = 0;
         sscanf(buffer + 1, "%u %ld", &insertId, &insertHash);
         savePersistenceFile(insertId, insertHash);
-        if (insertId == 0)
+        if (insertId)
         {
-            sprintf(buffer, "error\r\n");
-        }
-        else if (insertData(insertId, insertHash))
-        {
-            sprintf(buffer, "ok\r\n");
+            if (insertData(insertId, insertHash))
+            {
+                sprintf(buffer, "ok\r\n");
+            }
+            else
+            {
+                sprintf(buffer, "error\r\n");
+            }
         }
         else
         {
@@ -237,38 +238,20 @@ void socketMain(int descriptor)
     break;
     case 'S':
     {
-        timeCalc t;
         int64_t queryHash;
         uint8_t maxDistance;
         uint8_t resultCount;
         sscanf(buffer + 1, "%hhu %hhu %ld", &maxDistance, &resultCount, &queryHash);
         SearchResult result[resultCount];
-        startTimeCalc(&t);
-        startFastSearch(queryHash, maxDistance, resultCount, result);
-        double execTime = getTimeCalc(&t);
-        printf("Fast Search: %ld | Execution time: %fs\n", queryHash, execTime);
-        free(buffer);
-        buffer = calloc(14 * resultCount + 1, sizeof(char));
-        for (uint8_t i = 0; i < resultCount; i++)
+        timeCalc timer;
+        startTimeCalc(&timer);
+        startFastSearch(queryHash, 10, resultCount, result);
+        if (!result[0].id)
         {
-            sprintf(buffer, "%s%u:%u,", buffer, result[i].id, result[i].distance);
+            startFullSearch(queryHash, maxDistance, resultCount, result);
         }
-        buffer[strlen(buffer) - 1] = 0;
-        sprintf(buffer, "%s\r\n", buffer);
-    }
-    break;
-    case 'F':
-    {
-        timeCalc t;
-        int64_t queryHash;
-        uint8_t maxDistance;
-        uint8_t resultCount;
-        sscanf(buffer + 1, "%hhu %hhu %ld", &maxDistance, &resultCount, &queryHash);
-        SearchResult result[resultCount];
-        startTimeCalc(&t);
-        startFullSearch(queryHash, maxDistance, resultCount, result);
-        double execTime = getTimeCalc(&t);
-        printf("Full Search: %ld | Execution time: %fs\n", queryHash, execTime);
+        double execTime = getTimeCalc(&timer);
+        printf("Search: %ld | Execution time: %fs\n", queryHash, execTime);
         free(buffer);
         buffer = calloc(14 * resultCount + 1, sizeof(char));
         for (uint8_t i = 0; i < resultCount; i++)
