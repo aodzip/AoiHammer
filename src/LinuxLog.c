@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "LinuxLog.h"
 #include <string.h>
 #include <syslog.h>

@@ -1,6 +1,6 @@
 #pragma once
-#define _GNU_SOURCE
 #include <inttypes.h>
+
 extern uint8_t cpuCount;
 
 void savePersistenceFile(uint32_t id, uint64_t hash);

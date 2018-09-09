@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include "AoiHammer.h"
 #include "StorageStruct.h"
 #include "LinuxLog.h"
