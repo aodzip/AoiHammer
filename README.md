@@ -4,17 +4,17 @@
 标准make编译，依赖libpthread
 ## 启动参数
 
-AoiHammer: Hamming distance search engine
+                  AoiHammer: Hamming distance search engine
 
-Usage: ./aoihammer \[OPTIONS\]
+                  Usage: ./aoihammer \[OPTIONS\]
 
-         -d Running in daemon mode.
+                           -d Running in daemon mode.
          
-         -l [ADDR] Server listen address. Default: 127.0.0.1
+                           -l [ADDR] Server listen address. Default: 127.0.0.1
          
-         -p [PORT] Server listen port. Default: 8023
+                           -p [PORT] Server listen port. Default: 8023
          
-         -f [FILENAME] Persistence file path. Default: ./hashs.export
+                           -f [FILENAME] Persistence file path. Default: ./hashs.export
          
  -d 为Daemon后台运行，程序运行日志将写入syslog
  
