@@ -8,7 +8,7 @@
 
                   AoiHammer: Hamming distance search engine
 
-                  Usage: ./aoihammer \[OPTIONS\]
+                  Usage: ./aoihammer [OPTIONS]
 
                            -d Running in daemon mode.
          
